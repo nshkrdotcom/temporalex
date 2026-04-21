@@ -84,7 +84,8 @@ defmodule Temporalex.WorkflowTaskExecutor do
     case Map.pop(state.replay_results, seq) do
       {nil, _} ->
         # First execution: build command, block runner until result arrives
-        command = build_schedule_activity(seq, activity_type, state.task_queue, input, opts)
+        task_queue = Keyword.get(opts, :task_queue, state.task_queue)
+        command = build_schedule_activity(seq, activity_type, task_queue, input, opts)
 
         state = %{
           state

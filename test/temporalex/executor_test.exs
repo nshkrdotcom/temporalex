@@ -115,6 +115,33 @@ defmodule Temporalex.ExecutorTest do
       assert_receive {:executor_commands, "run-3", [cmd3], nil, :done}, 1_000
       assert {:complete_workflow_execution, _} = cmd3.variant
     end
+
+    test "activity task queue override is honored" do
+      run_fn = fn _args ->
+        GenServer.call(
+          Process.get(:__temporal_executor__),
+          {:execute_activity, "ExternalActivity", "input", task_queue: "external-queue"},
+          :infinity
+        )
+      end
+
+      {:ok, executor} =
+        WorkflowTaskExecutor.start_link(
+          server_pid: self(),
+          run_id: "run-activity-queue-override",
+          task_queue: "workflow-queue",
+          run_fn: run_fn
+        )
+
+      send(executor, {:start, %{}, []})
+
+      assert_receive {:executor_commands, "run-activity-queue-override", [cmd], nil, :yielded},
+                     1_000
+
+      assert {:schedule_activity, schedule} = cmd.variant
+      assert schedule.activity_type == "ExternalActivity"
+      assert schedule.task_queue == "external-queue"
+    end
   end
 
   # ============================================================
