@@ -15,12 +15,14 @@ defmodule Temporalex.Converter do
 
   alias Temporal.Api.Common.V1.Payload
 
+  @type payload :: struct()
+
   @json_encoding "json/plain"
   @binary_null "binary/null"
   @binary_plain "binary/plain"
 
   @doc "Encode an Elixir term into a Temporal Payload."
-  @spec to_payload(term()) :: Payload.t()
+  @spec to_payload(term()) :: payload()
   def to_payload(nil) do
     %Payload{metadata: %{"encoding" => @binary_null}, data: ""}
   end
@@ -40,7 +42,7 @@ defmodule Temporalex.Converter do
   end
 
   @doc "Encode a list of terms into a list of Payloads."
-  @spec to_payloads(list()) :: [Payload.t()]
+  @spec to_payloads(list()) :: [payload()]
   def to_payloads(values) when is_list(values) do
     Enum.map(values, &to_payload/1)
   end
@@ -51,7 +53,7 @@ defmodule Temporalex.Converter do
   Options:
     * `:keys` — `:atoms!` (default, safe) or `:strings`
   """
-  @spec from_payload(Payload.t(), keyword()) :: {:ok, term()} | {:error, String.t()}
+  @spec from_payload(payload(), keyword()) :: {:ok, term()} | {:error, String.t()}
   def from_payload(payload, opts \\ [])
   def from_payload(%Payload{data: nil}, _opts), do: {:ok, nil}
 
@@ -91,7 +93,7 @@ defmodule Temporalex.Converter do
   end
 
   @doc "Decode a Temporal Payload, raising on error."
-  @spec from_payload!(Payload.t(), keyword()) :: term()
+  @spec from_payload!(payload(), keyword()) :: term()
   def from_payload!(payload, opts \\ []) do
     case from_payload(payload, opts) do
       {:ok, term} ->
@@ -107,7 +109,7 @@ defmodule Temporalex.Converter do
   end
 
   @doc "Decode a list of Payloads back to Elixir terms."
-  @spec from_payloads([Payload.t()], keyword()) :: {:ok, [term()]} | {:error, String.t()}
+  @spec from_payloads([payload()], keyword()) :: {:ok, [term()]} | {:error, String.t()}
   def from_payloads(payloads, opts \\ []) when is_list(payloads) do
     payloads
     |> Enum.reduce_while({:ok, []}, fn payload, {:ok, acc} ->

@@ -9,6 +9,8 @@ defmodule Temporalex.FailureConverter do
 
   alias Temporal.Api.Failure.V1.Failure
 
+  @type failure :: struct()
+
   alias Temporalex.Error.{
     ActivityFailure,
     TimeoutError,
@@ -18,7 +20,7 @@ defmodule Temporalex.FailureConverter do
   }
 
   @doc "Convert an Elixir exception or error term into a Temporal Failure proto."
-  @spec to_failure(term()) :: Failure.t()
+  @spec to_failure(term()) :: failure()
   def to_failure(%ActivityFailure{} = e) do
     %Failure{
       message: Exception.message(e),
@@ -88,7 +90,7 @@ defmodule Temporalex.FailureConverter do
   end
 
   @doc "Convert a Temporal Failure proto into an Elixir error struct."
-  @spec from_failure(Failure.t()) :: Exception.t()
+  @spec from_failure(failure()) :: Exception.t()
   def from_failure(%Failure{failure_info: {:timeout_failure_info, info}} = f) do
     %TimeoutError{
       message: f.message || "timeout",

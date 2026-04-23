@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Update the optional OpenTelemetry semantic conventions dependency to the
+  current `~> 1.27` release line.
+
 ## 0.1.0
 
 Initial release.

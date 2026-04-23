@@ -1,7 +1,7 @@
 defmodule Temporalex.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @source_url "https://github.com/temporalex/temporalex"
 
   def project do
@@ -42,7 +42,7 @@ defmodule Temporalex.MixProject do
       {:jason, "~> 1.4"},
       {:telemetry, "~> 1.0"},
       {:opentelemetry_api, "~> 1.4", optional: true},
-      {:opentelemetry_semantic_conventions, "~> 0.2", optional: true},
+      {:opentelemetry_semantic_conventions, "~> 1.27", optional: true},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
@@ -138,6 +138,12 @@ defmodule Temporalex.MixProject do
         not String.contains?(mod_str, ".Proto.") and
           not String.contains?(mod_str, ".Native") and
           not String.contains?(mod_str, "WorkflowTaskExecutor")
+      end,
+      skip_undefined_reference_warnings_on: fn ref ->
+        String.contains?(ref, "Temporal.Api.")
+      end,
+      skip_code_autolink_to: fn ref ->
+        String.contains?(ref, "Temporal.Api.")
       end
     ]
   end
