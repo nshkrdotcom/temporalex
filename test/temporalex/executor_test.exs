@@ -337,9 +337,12 @@ defmodule Temporalex.ExecutorTest do
     end
 
     test "requires task_queue" do
-      assert_raise ArgumentError, ~r/task_queue/, fn ->
-        Temporalex.Server.child_spec(workflows: [], activities: [])
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Temporalex.Server.child_spec(workflows: [], activities: [])
+        end
+
+      assert error.message =~ "task_queue"
     end
   end
 end

@@ -31,7 +31,7 @@ defmodule Temporalex.Connection do
   ]
 
   @type t :: %__MODULE__{
-          name: atom(),
+          name: Temporalex.process_name(),
           address: String.t(),
           namespace: String.t(),
           api_key: String.t() | nil,
@@ -57,19 +57,19 @@ defmodule Temporalex.Connection do
   end
 
   @doc "Get the connection state (runtime + client resources)."
-  @spec get(atom() | pid()) :: {:ok, t()} | {:error, term()}
+  @spec get(Temporalex.process_name() | pid()) :: {:ok, t()} | {:error, term()}
   def get(conn) do
     GenServer.call(conn, :get)
   end
 
   @doc "Get the raw NIF runtime resource."
-  @spec get_runtime(atom() | pid()) :: {:ok, reference()}
+  @spec get_runtime(Temporalex.process_name() | pid()) :: {:ok, reference()}
   def get_runtime(conn) do
     GenServer.call(conn, :get_runtime)
   end
 
   @doc "Get the raw NIF client resource."
-  @spec get_client(atom() | pid()) :: {:ok, reference()}
+  @spec get_client(Temporalex.process_name() | pid()) :: {:ok, reference()}
   def get_client(conn) do
     GenServer.call(conn, :get_client)
   end

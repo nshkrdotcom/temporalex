@@ -111,11 +111,11 @@ defmodule Temporalex.DSLTest do
       assert :send_receipt in names
     end
 
-    test "impl functions are generated" do
-      assert {:ok, "charged-42"} = Payments.__temporal_perform_charge__(42)
+    test "bounded implementation dispatcher is generated" do
+      assert {:ok, "charged-42"} = Payments.__temporal_perform__(:charge, 42)
 
       assert {:ok, "receipt-sent-to-a@b.com"} =
-               Payments.__temporal_perform_send_receipt__("a@b.com")
+               Payments.__temporal_perform__(:send_receipt, "a@b.com")
     end
 
     test "activity type strings" do

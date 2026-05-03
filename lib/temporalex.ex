@@ -54,6 +54,8 @@ defmodule Temporalex do
 
   use Supervisor
 
+  @type process_name :: atom() | {:global, term()} | {:via, module(), term()}
+
   @doc """
   Start the Temporalex supervisor.
 
@@ -123,8 +125,12 @@ defmodule Temporalex do
       conn = Temporalex.connection_name(MyApp.Temporal)
       {:ok, handle} = Temporalex.start_workflow(conn, MyWorkflow, %{key: "value"})
   """
-  @spec connection_name(atom()) :: atom()
-  def connection_name(instance_name), do: Module.concat(instance_name, Connection)
+  @spec connection_name(process_name()) :: process_name()
+  def connection_name({:global, term}), do: {:global, {term, Connection}}
+  def connection_name({:via, module, term}), do: {:via, module, {term, Connection}}
+
+  def connection_name(instance_name) when is_atom(instance_name),
+    do: Module.concat(instance_name, Connection)
 
   # --- Client API ---
 
@@ -133,7 +139,7 @@ defmodule Temporalex do
 
   See `Temporalex.Client.start_workflow/4` for full options.
   """
-  @spec start_workflow(atom() | pid() | map(), module(), term(), keyword()) ::
+  @spec start_workflow(process_name() | pid() | map(), module(), term(), keyword()) ::
           {:ok, map()} | {:error, term()}
   def start_workflow(conn, workflow_module, args \\ [], opts \\ []) do
     Temporalex.Client.start_workflow(conn, workflow_module, args, opts)
@@ -154,35 +160,35 @@ defmodule Temporalex do
     Temporalex.Client.get_result(handle, opts)
   end
 
-  @spec get_result(atom() | pid() | map(), String.t() | map(), keyword()) ::
+  @spec get_result(process_name() | pid() | map(), String.t() | map(), keyword()) ::
           {:ok, term()} | {:error, term()}
   def get_result(conn, handle_or_id, opts \\ []) do
     Temporalex.Client.get_result(conn, handle_or_id, opts)
   end
 
   @doc "Send a signal to a running workflow. See `Temporalex.Client.signal_workflow/5`."
-  @spec signal_workflow(atom() | pid() | map(), String.t(), String.t(), term(), keyword()) ::
+  @spec signal_workflow(process_name() | pid() | map(), String.t(), String.t(), term(), keyword()) ::
           :ok | {:error, term()}
   def signal_workflow(conn, workflow_id, signal_name, args \\ nil, opts \\ []) do
     Temporalex.Client.signal_workflow(conn, workflow_id, signal_name, args, opts)
   end
 
   @doc "Query a running workflow's state. See `Temporalex.Client.query_workflow/5`."
-  @spec query_workflow(atom() | pid() | map(), String.t(), String.t(), term(), keyword()) ::
+  @spec query_workflow(process_name() | pid() | map(), String.t(), String.t(), term(), keyword()) ::
           {:ok, term()} | {:error, term()}
   def query_workflow(conn, workflow_id, query_type, args \\ nil, opts \\ []) do
     Temporalex.Client.query_workflow(conn, workflow_id, query_type, args, opts)
   end
 
   @doc "Cancel a running workflow. See `Temporalex.Client.cancel_workflow/3`."
-  @spec cancel_workflow(atom() | pid() | map(), String.t(), keyword()) ::
+  @spec cancel_workflow(process_name() | pid() | map(), String.t(), keyword()) ::
           :ok | {:error, term()}
   def cancel_workflow(conn, workflow_id, opts \\ []) do
     Temporalex.Client.cancel_workflow(conn, workflow_id, opts)
   end
 
   @doc "Terminate a running workflow immediately. See `Temporalex.Client.terminate_workflow/3`."
-  @spec terminate_workflow(atom() | pid() | map(), String.t(), keyword()) ::
+  @spec terminate_workflow(process_name() | pid() | map(), String.t(), keyword()) ::
           :ok | {:error, term()}
   def terminate_workflow(conn, workflow_id, opts \\ []) do
     Temporalex.Client.terminate_workflow(conn, workflow_id, opts)

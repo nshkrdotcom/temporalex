@@ -8,9 +8,12 @@ defmodule Temporalex.ClientTest do
 
   describe "start_workflow argument validation" do
     test "raises when keyword list is passed as args without opts" do
-      assert_raise ArgumentError, ~r/keyword list as args/, fn ->
-        Client.start_workflow(:conn, SomeModule, id: "wf-1", task_queue: "q")
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Client.start_workflow(:conn, SomeModule, id: "wf-1", task_queue: "q")
+        end
+
+      assert error.message =~ "keyword list as args"
     end
   end
 

@@ -51,9 +51,12 @@ defmodule Temporalex.ClientInternalsTest do
 
   describe "start_workflow argument validation" do
     test "keyword list args detected as opts mistake" do
-      assert_raise ArgumentError, ~r/keyword list/, fn ->
-        Client.start_workflow(:conn, DummyWorkflow, id: "x", task_queue: "q")
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Client.start_workflow(:conn, DummyWorkflow, id: "x", task_queue: "q")
+        end
+
+      assert error.message =~ "keyword list"
     end
   end
 

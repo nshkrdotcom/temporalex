@@ -36,27 +36,39 @@ defmodule Temporalex.EaseOfUseTest do
 
   describe "sleep/1 validation" do
     test "rejects zero duration" do
-      assert_raise ArgumentError, ~r/must be positive/, fn ->
-        Temporalex.Workflow.API.sleep(0)
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Temporalex.Workflow.API.sleep(0)
+        end
+
+      assert error.message =~ "must be positive"
     end
 
     test "rejects negative duration" do
-      assert_raise ArgumentError, ~r/must be positive/, fn ->
-        Temporalex.Workflow.API.sleep(-1000)
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Temporalex.Workflow.API.sleep(-1000)
+        end
+
+      assert error.message =~ "must be positive"
     end
 
     test "rejects non-integer" do
-      assert_raise ArgumentError, ~r/must be a positive integer/, fn ->
-        Temporalex.Workflow.API.sleep(1.5)
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Temporalex.Workflow.API.sleep(1.5)
+        end
+
+      assert error.message =~ "must be a positive integer"
     end
 
     test "rejects string" do
-      assert_raise ArgumentError, ~r/must be a positive integer/, fn ->
-        Temporalex.Workflow.API.sleep("5000")
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Temporalex.Workflow.API.sleep("5000")
+        end
+
+      assert error.message =~ "must be a positive integer"
     end
   end
 

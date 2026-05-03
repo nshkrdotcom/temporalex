@@ -3,6 +3,7 @@ use rustler::{Atom, Encoder, Env, LocalPid, NewBinary, OwnedEnv, Resource, Resou
 use std::panic::{AssertUnwindSafe, RefUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use temporalio_client::tonic::Request;
 use temporalio_client::Connection;
 use temporalio_client::ConnectionOptions;
 use temporalio_common::protos::temporal::api::{
@@ -12,14 +13,13 @@ use temporalio_common::protos::temporal::api::{
     taskqueue::v1::TaskQueue,
     workflowservice::v1::{
         DescribeWorkflowExecutionRequest, GetWorkflowExecutionHistoryRequest,
-        ListWorkflowExecutionsRequest, QueryWorkflowRequest,
-        RequestCancelWorkflowExecutionRequest, SignalWorkflowExecutionRequest,
-        StartWorkflowExecutionRequest, TerminateWorkflowExecutionRequest,
+        ListWorkflowExecutionsRequest, QueryWorkflowRequest, RequestCancelWorkflowExecutionRequest,
+        SignalWorkflowExecutionRequest, StartWorkflowExecutionRequest,
+        TerminateWorkflowExecutionRequest,
     },
 };
 use temporalio_common::worker::WorkerTaskTypes;
-use temporalio_sdk_core::{CoreRuntime, Worker, init_worker};
-use temporalio_client::tonic::Request;
+use temporalio_sdk_core::{init_worker, CoreRuntime, Worker};
 use tokio::time::{timeout, Duration};
 use tracing::{debug, error, info, warn};
 use url::Url;
@@ -92,8 +92,6 @@ impl RefUnwindSafe for WorkerResource {}
 impl Resource for WorkerResource {}
 
 // --- Tracing initialization ---
-// Uses TEMPORALEX_LOG env var (e.g. TEMPORALEX_LOG=debug or TEMPORALEX_LOG=temporalio=debug)
-// Falls back to "info" if unset. This captures Core SDK internal logs too.
 
 /// Helper: send a message to an Elixir process, logging if the send fails.
 /// This prevents silent message loss when the target process is dead.
@@ -102,7 +100,10 @@ where
     F: for<'a> FnOnce(Env<'a>) -> rustler::Term<'a>,
 {
     if env.send_and_clear(pid, builder).is_err() {
-        error!(operation = op, "send_and_clear failed — target process may be dead");
+        error!(
+            operation = op,
+            "send_and_clear failed — target process may be dead"
+        );
     }
 }
 
@@ -113,13 +114,8 @@ fn init_tracing() {
         return; // already initialized
     }
 
-    use tracing_subscriber::EnvFilter;
-
-    let filter = EnvFilter::try_from_env("TEMPORALEX_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info,temporalio=info,temporalex_native=debug"));
-
     tracing_subscriber::fmt()
-        .with_env_filter(filter)
+        .with_max_level(tracing::Level::INFO)
         .with_target(true)
         .with_thread_ids(true)
         .with_file(true)
@@ -164,11 +160,10 @@ fn create_runtime() -> Result<ResourceArc<RuntimeResource>, String> {
             format!("RuntimeOptions build error: {e}")
         })?;
 
-    let core = CoreRuntime::new(opts, Default::default())
-        .map_err(|e| {
-            error!(error = %e, "Failed to create CoreRuntime");
-            format!("CoreRuntime creation error: {e}")
-        })?;
+    let core = CoreRuntime::new(opts, Default::default()).map_err(|e| {
+        error!(error = %e, "Failed to create CoreRuntime");
+        format!("CoreRuntime creation error: {e}")
+    })?;
 
     info!("CoreRuntime created successfully");
     Ok(ResourceArc::new(RuntimeResource {
@@ -201,13 +196,18 @@ fn connect_client(
         let identity = format!("temporalex@{pid}");
         info!(identity = %identity, target = %target, "Building connection options");
 
-        let api_key_opt = if api_key.is_empty() { None } else {
+        let api_key_opt = if api_key.is_empty() {
+            None
+        } else {
             info!("API key auth enabled");
             Some(api_key)
         };
 
-        let headers_opt = if headers.is_empty() { None } else {
-            let header_map: std::collections::HashMap<String, String> = headers.into_iter().collect();
+        let headers_opt = if headers.is_empty() {
+            None
+        } else {
+            let header_map: std::collections::HashMap<String, String> =
+                headers.into_iter().collect();
             info!(header_count = header_map.len(), "Custom headers configured");
             Some(header_map)
         };
@@ -278,11 +278,10 @@ fn create_worker(
     let runtime_handle = runtime.core.tokio_handle().clone();
 
     let _guard = runtime_handle.enter();
-    let worker = init_worker(&runtime.core, config, conn)
-        .map_err(|e| {
-            error!(error = %e, task_queue = %task_queue, "Failed to init worker");
-            format!("Worker init error: {e}")
-        })?;
+    let worker = init_worker(&runtime.core, config, conn).map_err(|e| {
+        error!(error = %e, task_queue = %task_queue, "Failed to init worker");
+        format!("Worker init error: {e}")
+    })?;
 
     info!(task_queue = %task_queue, namespace = %namespace, "Worker created successfully");
     Ok(ResourceArc::new(WorkerResource {
@@ -305,43 +304,50 @@ fn poll_workflow_activation(worker: ResourceArc<WorkerResource>, pid: LocalPid) 
         let result = w.poll_workflow_activation().await;
 
         let mut env = OwnedEnv::new();
-        send_or_log(&mut env, &pid, "poll_workflow_activation", |env| match result {
-            Ok(activation) => {
-                let job_types: Vec<String> = activation.jobs.iter().map(|j| {
-                    match &j.variant {
-                        Some(v) => format!("{:?}", std::mem::discriminant(v)),
-                        None => "None".to_string(),
-                    }
-                }).collect();
+        send_or_log(
+            &mut env,
+            &pid,
+            "poll_workflow_activation",
+            |env| match result {
+                Ok(activation) => {
+                    let job_types: Vec<String> = activation
+                        .jobs
+                        .iter()
+                        .map(|j| match &j.variant {
+                            Some(v) => format!("{:?}", std::mem::discriminant(v)),
+                            None => "None".to_string(),
+                        })
+                        .collect();
 
-                info!(
-                    run_id = %activation.run_id,
-                    num_jobs = activation.jobs.len(),
-                    job_types = ?job_types,
-                    is_replaying = activation.is_replaying,
-                    history_length = activation.history_length,
-                    "Received workflow activation"
-                );
+                    info!(
+                        run_id = %activation.run_id,
+                        num_jobs = activation.jobs.len(),
+                        job_types = ?job_types,
+                        is_replaying = activation.is_replaying,
+                        history_length = activation.history_length,
+                        "Received workflow activation"
+                    );
 
-                let bytes = activation.encode_to_vec();
-                debug!(
-                    run_id = %activation.run_id,
-                    byte_size = bytes.len(),
-                    "Sending activation bytes to Elixir"
-                );
+                    let bytes = activation.encode_to_vec();
+                    debug!(
+                        run_id = %activation.run_id,
+                        byte_size = bytes.len(),
+                        "Sending activation bytes to Elixir"
+                    );
 
-                let bin_term = make_binary(env, &bytes);
-                (atoms::workflow_activation(), bin_term).encode(env)
-            }
-            Err(temporalio_sdk_core::PollError::ShutDown) => {
-                info!("Poll workflow: shutdown signal received");
-                (atoms::error(), atoms::shutdown()).encode(env)
-            }
-            Err(e) => {
-                error!(error = ?e, "Poll workflow activation failed");
-                (atoms::error(), format!("{e}")).encode(env)
-            }
-        });
+                    let bin_term = make_binary(env, &bytes);
+                    (atoms::workflow_activation(), bin_term).encode(env)
+                }
+                Err(temporalio_sdk_core::PollError::ShutDown) => {
+                    info!("Poll workflow: shutdown signal received");
+                    (atoms::error(), atoms::shutdown()).encode(env)
+                }
+                Err(e) => {
+                    error!(error = ?e, "Poll workflow activation failed");
+                    (atoms::error(), format!("{e}")).encode(env)
+                }
+            },
+        );
     });
     atoms::ok()
 }
@@ -546,31 +552,39 @@ fn complete_activity_task(
                 debug!(result = ?result, "Activity result detail");
             }
 
-            w.complete_activity_task(completion)
-                .await
-                .map_err(|e| {
-                    error!(error = ?e, "Core rejected activity completion");
-                    format!("Core activity completion error: {e}")
-                })
-        }).await {
+            w.complete_activity_task(completion).await.map_err(|e| {
+                error!(error = ?e, "Core rejected activity completion");
+                format!("Core activity completion error: {e}")
+            })
+        })
+        .await
+        {
             Ok(inner) => inner,
             Err(_) => {
-                error!("complete_activity_task timed out after {}s", COMPLETION_TIMEOUT.as_secs());
+                error!(
+                    "complete_activity_task timed out after {}s",
+                    COMPLETION_TIMEOUT.as_secs()
+                );
                 Err("activity completion timed out".to_string())
             }
         };
 
         let mut env = OwnedEnv::new();
-        send_or_log(&mut env, &pid, "complete_activity_task", |env| match result {
-            Ok(()) => {
-                info!("Activity completion accepted by Core");
-                (atoms::activity_completion(), atoms::ok()).encode(env)
-            }
-            Err(msg) => {
-                error!(error = %msg, "Activity completion FAILED");
-                (atoms::activity_completion(), (atoms::error(), msg)).encode(env)
-            }
-        });
+        send_or_log(
+            &mut env,
+            &pid,
+            "complete_activity_task",
+            |env| match result {
+                Ok(()) => {
+                    info!("Activity completion accepted by Core");
+                    (atoms::activity_completion(), atoms::ok()).encode(env)
+                }
+                Err(msg) => {
+                    error!(error = %msg, "Activity completion FAILED");
+                    (atoms::activity_completion(), (atoms::error(), msg)).encode(env)
+                }
+            },
+        );
     });
     atoms::ok()
 }
@@ -638,7 +652,10 @@ fn shutdown_worker(worker: ResourceArc<WorkerResource>, pid: LocalPid) -> Atom {
     handle.spawn(async move {
         match timeout(SHUTDOWN_TIMEOUT, w.shutdown()).await {
             Ok(()) => info!("Worker shutdown complete"),
-            Err(_) => warn!("Worker shutdown timed out after {}s — proceeding anyway", SHUTDOWN_TIMEOUT.as_secs()),
+            Err(_) => warn!(
+                "Worker shutdown timed out after {}s — proceeding anyway",
+                SHUTDOWN_TIMEOUT.as_secs()
+            ),
         }
 
         let mut env = OwnedEnv::new();
@@ -666,7 +683,10 @@ fn validate_worker(worker: ResourceArc<WorkerResource>, pid: LocalPid) -> Atom {
                 Err(format!("{e}"))
             }
             Err(_) => {
-                error!("validate_worker timed out after {}s", VALIDATE_TIMEOUT.as_secs());
+                error!(
+                    "validate_worker timed out after {}s",
+                    VALIDATE_TIMEOUT.as_secs()
+                );
                 Err("validation timed out".to_string())
             }
         };
@@ -677,9 +697,7 @@ fn validate_worker(worker: ResourceArc<WorkerResource>, pid: LocalPid) -> Atom {
                 info!("Worker validation succeeded");
                 (atoms::validate_result(), atoms::ok()).encode(env)
             }
-            Err(msg) => {
-                (atoms::validate_result(), (atoms::error(), msg)).encode(env)
-            }
+            Err(msg) => (atoms::validate_result(), (atoms::error(), msg)).encode(env),
         });
     });
     atoms::ok()
@@ -734,7 +752,9 @@ fn start_workflow(
             let request = StartWorkflowExecutionRequest {
                 namespace: namespace.clone(),
                 workflow_id: workflow_id.clone(),
-                workflow_type: Some(WorkflowType { name: workflow_type.clone() }),
+                workflow_type: Some(WorkflowType {
+                    name: workflow_type.clone(),
+                }),
                 task_queue: Some(TaskQueue {
                     name: task_queue.clone(),
                     ..Default::default()
@@ -764,26 +784,23 @@ fn start_workflow(
                 "Workflow started successfully"
             );
             Ok(run_id)
-        }).await {
+        })
+        .await
+        {
             Ok(inner) => inner,
             Err(_) => {
-                error!("start_workflow timed out after {}s", CLIENT_OP_TIMEOUT.as_secs());
+                error!(
+                    "start_workflow timed out after {}s",
+                    CLIENT_OP_TIMEOUT.as_secs()
+                );
                 Err("start_workflow timed out".to_string())
             }
         };
 
         let mut env = OwnedEnv::new();
         send_or_log(&mut env, &pid, "start_workflow", |env| match result {
-            Ok(run_id) => (
-                atoms::start_workflow_result(),
-                (atoms::ok(), run_id),
-            )
-                .encode(env),
-            Err(msg) => (
-                atoms::start_workflow_result(),
-                (atoms::error(), msg),
-            )
-                .encode(env),
+            Ok(run_id) => (atoms::start_workflow_result(), (atoms::ok(), run_id)).encode(env),
+            Err(msg) => (atoms::start_workflow_result(), (atoms::error(), msg)).encode(env),
         });
     });
     atoms::ok()
@@ -859,10 +876,15 @@ fn signal_workflow(
                 "Signal sent successfully"
             );
             Ok(())
-        }).await {
+        })
+        .await
+        {
             Ok(inner) => inner,
             Err(_) => {
-                error!("signal_workflow timed out after {}s", CLIENT_OP_TIMEOUT.as_secs());
+                error!(
+                    "signal_workflow timed out after {}s",
+                    CLIENT_OP_TIMEOUT.as_secs()
+                );
                 Err("signal_workflow timed out".to_string())
             }
         };
@@ -870,11 +892,7 @@ fn signal_workflow(
         let mut env = OwnedEnv::new();
         send_or_log(&mut env, &pid, "signal_workflow", |env| match result {
             Ok(()) => (atoms::signal_workflow_result(), atoms::ok()).encode(env),
-            Err(msg) => (
-                atoms::signal_workflow_result(),
-                (atoms::error(), msg),
-            )
-                .encode(env),
+            Err(msg) => (atoms::signal_workflow_result(), (atoms::error(), msg)).encode(env),
         });
     });
     atoms::ok()
@@ -970,10 +988,15 @@ fn query_workflow(
                 "Query completed successfully"
             );
             Ok(result_bytes)
-        }).await {
+        })
+        .await
+        {
             Ok(inner) => inner,
             Err(_) => {
-                error!("query_workflow timed out after {}s", CLIENT_OP_TIMEOUT.as_secs());
+                error!(
+                    "query_workflow timed out after {}s",
+                    CLIENT_OP_TIMEOUT.as_secs()
+                );
                 Err("query_workflow timed out".to_string())
             }
         };
@@ -984,11 +1007,7 @@ fn query_workflow(
                 let bin_term = make_binary(env, &bytes);
                 (atoms::query_workflow_result(), (atoms::ok(), bin_term)).encode(env)
             }
-            Err(msg) => (
-                atoms::query_workflow_result(),
-                (atoms::error(), msg),
-            )
-                .encode(env),
+            Err(msg) => (atoms::query_workflow_result(), (atoms::error(), msg)).encode(env),
         });
     });
     atoms::ok()
@@ -1046,10 +1065,15 @@ fn cancel_workflow(
 
             info!(workflow_id = %workflow_id, "Cancel request sent successfully");
             Ok(())
-        }).await {
+        })
+        .await
+        {
             Ok(inner) => inner,
             Err(_) => {
-                error!("cancel_workflow timed out after {}s", CLIENT_OP_TIMEOUT.as_secs());
+                error!(
+                    "cancel_workflow timed out after {}s",
+                    CLIENT_OP_TIMEOUT.as_secs()
+                );
                 Err("cancel_workflow timed out".to_string())
             }
         };
@@ -1057,11 +1081,7 @@ fn cancel_workflow(
         let mut env = OwnedEnv::new();
         send_or_log(&mut env, &pid, "cancel_workflow", |env| match result {
             Ok(()) => (atoms::cancel_workflow_result(), atoms::ok()).encode(env),
-            Err(msg) => (
-                atoms::cancel_workflow_result(),
-                (atoms::error(), msg),
-            )
-                .encode(env),
+            Err(msg) => (atoms::cancel_workflow_result(), (atoms::error(), msg)).encode(env),
         });
     });
     atoms::ok()
@@ -1117,10 +1137,15 @@ fn terminate_workflow(
 
             info!(workflow_id = %workflow_id, "Workflow terminated successfully");
             Ok(())
-        }).await {
+        })
+        .await
+        {
             Ok(inner) => inner,
             Err(_) => {
-                error!("terminate_workflow timed out after {}s", CLIENT_OP_TIMEOUT.as_secs());
+                error!(
+                    "terminate_workflow timed out after {}s",
+                    CLIENT_OP_TIMEOUT.as_secs()
+                );
                 Err("terminate_workflow timed out".to_string())
             }
         };
@@ -1128,11 +1153,7 @@ fn terminate_workflow(
         let mut env = OwnedEnv::new();
         send_or_log(&mut env, &pid, "terminate_workflow", |env| match result {
             Ok(()) => (atoms::terminate_workflow_result(), atoms::ok()).encode(env),
-            Err(msg) => (
-                atoms::terminate_workflow_result(),
-                (atoms::error(), msg),
-            )
-                .encode(env),
+            Err(msg) => (atoms::terminate_workflow_result(), (atoms::error(), msg)).encode(env),
         });
     });
     atoms::ok()
@@ -1336,73 +1357,95 @@ fn describe_workflow(
     info!(namespace = %namespace, workflow_id = %workflow_id, "Describing workflow");
 
     handle.spawn(async move {
-        let result: Result<Vec<(String, String)>, String> = match timeout(CLIENT_OP_TIMEOUT, async {
-            let mut svc = conn.workflow_service();
+        let result: Result<Vec<(String, String)>, String> =
+            match timeout(CLIENT_OP_TIMEOUT, async {
+                let mut svc = conn.workflow_service();
 
-            let request = DescribeWorkflowExecutionRequest {
-                namespace: namespace.clone(),
-                execution: Some(WorkflowExecution {
-                    workflow_id: workflow_id.clone(),
-                    run_id: run_id.clone(),
-                }),
+                let request = DescribeWorkflowExecutionRequest {
+                    namespace: namespace.clone(),
+                    execution: Some(WorkflowExecution {
+                        workflow_id: workflow_id.clone(),
+                        run_id: run_id.clone(),
+                    }),
+                };
+
+                let response = svc
+                    .describe_workflow_execution(Request::new(request))
+                    .await
+                    .map_err(|e| format!("gRPC error: {e}"))?;
+
+                let inner = response.into_inner();
+
+                // Extract key fields into string pairs for Elixir
+                let mut fields = Vec::new();
+
+                if let Some(ref info) = inner.workflow_execution_info {
+                    if let Some(ref exec) = info.execution {
+                        fields.push(("workflow_id".to_string(), exec.workflow_id.clone()));
+                        fields.push(("run_id".to_string(), exec.run_id.clone()));
+                    }
+                    if let Some(ref wf_type) = info.r#type {
+                        fields.push(("workflow_type".to_string(), wf_type.name.clone()));
+                    }
+                    fields.push(("status".to_string(), format!("{:?}", info.status)));
+                    fields.push((
+                        "history_length".to_string(),
+                        info.history_length.to_string(),
+                    ));
+                    if let Some(ref start_time) = info.start_time {
+                        fields.push((
+                            "start_time".to_string(),
+                            format!("{}.{}", start_time.seconds, start_time.nanos),
+                        ));
+                    }
+                    if let Some(ref close_time) = info.close_time {
+                        fields.push((
+                            "close_time".to_string(),
+                            format!("{}.{}", close_time.seconds, close_time.nanos),
+                        ));
+                    }
+                    if !info.task_queue.is_empty() {
+                        fields.push(("task_queue".to_string(), info.task_queue.clone()));
+                    }
+                }
+
+                fields.push((
+                    "pending_activities".to_string(),
+                    inner.pending_activities.len().to_string(),
+                ));
+                fields.push((
+                    "pending_children".to_string(),
+                    inner.pending_children.len().to_string(),
+                ));
+
+                Ok(fields)
+            })
+            .await
+            {
+                Ok(inner) => inner,
+                Err(_) => {
+                    error!(
+                        "describe_workflow timed out after {}s",
+                        CLIENT_OP_TIMEOUT.as_secs()
+                    );
+                    Err("describe_workflow timed out".to_string())
+                }
             };
-
-            let response = svc
-                .describe_workflow_execution(Request::new(request))
-                .await
-                .map_err(|e| format!("gRPC error: {e}"))?;
-
-            let inner = response.into_inner();
-
-            // Extract key fields into string pairs for Elixir
-            let mut fields = Vec::new();
-
-            if let Some(ref info) = inner.workflow_execution_info {
-                if let Some(ref exec) = info.execution {
-                    fields.push(("workflow_id".to_string(), exec.workflow_id.clone()));
-                    fields.push(("run_id".to_string(), exec.run_id.clone()));
-                }
-                if let Some(ref wf_type) = info.r#type {
-                    fields.push(("workflow_type".to_string(), wf_type.name.clone()));
-                }
-                fields.push(("status".to_string(), format!("{:?}", info.status)));
-                fields.push(("history_length".to_string(), info.history_length.to_string()));
-                if let Some(ref start_time) = info.start_time {
-                    fields.push(("start_time".to_string(), format!("{}.{}", start_time.seconds, start_time.nanos)));
-                }
-                if let Some(ref close_time) = info.close_time {
-                    fields.push(("close_time".to_string(), format!("{}.{}", close_time.seconds, close_time.nanos)));
-                }
-                if !info.task_queue.is_empty() {
-                    fields.push(("task_queue".to_string(), info.task_queue.clone()));
-                }
-            }
-
-            fields.push(("pending_activities".to_string(), inner.pending_activities.len().to_string()));
-            fields.push(("pending_children".to_string(), inner.pending_children.len().to_string()));
-
-            Ok(fields)
-        }).await {
-            Ok(inner) => inner,
-            Err(_) => {
-                error!("describe_workflow timed out after {}s", CLIENT_OP_TIMEOUT.as_secs());
-                Err("describe_workflow timed out".to_string())
-            }
-        };
 
         let mut env = OwnedEnv::new();
         send_or_log(&mut env, &pid, "describe_workflow", |env| match result {
             Ok(fields) => {
                 let map = rustler::Term::map_from_pairs(
                     env,
-                    &fields.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect::<Vec<_>>(),
-                ).unwrap();
+                    &fields
+                        .iter()
+                        .map(|(k, v)| (k.as_str(), v.as_str()))
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap();
                 (atoms::describe_workflow_result(), (atoms::ok(), map)).encode(env)
             }
-            Err(msg) => (
-                atoms::describe_workflow_result(),
-                (atoms::error(), msg),
-            ).encode(env),
+            Err(msg) => (atoms::describe_workflow_result(), (atoms::error(), msg)).encode(env),
         });
     });
     atoms::ok()
@@ -1423,65 +1466,82 @@ fn list_workflows(
     info!(namespace = %namespace, query = %query, page_size = page_size, "Listing workflows");
 
     handle.spawn(async move {
-        let result: Result<Vec<Vec<(String, String)>>, String> = match timeout(CLIENT_OP_TIMEOUT, async {
-            let mut svc = conn.workflow_service();
+        let result: Result<Vec<Vec<(String, String)>>, String> =
+            match timeout(CLIENT_OP_TIMEOUT, async {
+                let mut svc = conn.workflow_service();
 
-            let request = ListWorkflowExecutionsRequest {
-                namespace: namespace.clone(),
-                page_size,
-                query: query.clone(),
-                next_page_token: vec![],
+                let request = ListWorkflowExecutionsRequest {
+                    namespace: namespace.clone(),
+                    page_size,
+                    query: query.clone(),
+                    next_page_token: vec![],
+                };
+
+                let response = svc
+                    .list_workflow_executions(Request::new(request))
+                    .await
+                    .map_err(|e| format!("gRPC error: {e}"))?;
+
+                let inner = response.into_inner();
+
+                let executions: Vec<Vec<(String, String)>> = inner
+                    .executions
+                    .iter()
+                    .map(|info| {
+                        let mut fields = Vec::new();
+                        if let Some(ref exec) = info.execution {
+                            fields.push(("workflow_id".to_string(), exec.workflow_id.clone()));
+                            fields.push(("run_id".to_string(), exec.run_id.clone()));
+                        }
+                        if let Some(ref wf_type) = info.r#type {
+                            fields.push(("workflow_type".to_string(), wf_type.name.clone()));
+                        }
+                        fields.push(("status".to_string(), format!("{:?}", info.status)));
+                        if let Some(ref start_time) = info.start_time {
+                            fields.push((
+                                "start_time".to_string(),
+                                format!("{}.{}", start_time.seconds, start_time.nanos),
+                            ));
+                        }
+                        fields
+                    })
+                    .collect();
+
+                info!(count = executions.len(), "Listed workflows");
+                Ok(executions)
+            })
+            .await
+            {
+                Ok(inner) => inner,
+                Err(_) => {
+                    error!(
+                        "list_workflows timed out after {}s",
+                        CLIENT_OP_TIMEOUT.as_secs()
+                    );
+                    Err("list_workflows timed out".to_string())
+                }
             };
-
-            let response = svc
-                .list_workflow_executions(Request::new(request))
-                .await
-                .map_err(|e| format!("gRPC error: {e}"))?;
-
-            let inner = response.into_inner();
-
-            let executions: Vec<Vec<(String, String)>> = inner.executions.iter().map(|info| {
-                let mut fields = Vec::new();
-                if let Some(ref exec) = info.execution {
-                    fields.push(("workflow_id".to_string(), exec.workflow_id.clone()));
-                    fields.push(("run_id".to_string(), exec.run_id.clone()));
-                }
-                if let Some(ref wf_type) = info.r#type {
-                    fields.push(("workflow_type".to_string(), wf_type.name.clone()));
-                }
-                fields.push(("status".to_string(), format!("{:?}", info.status)));
-                if let Some(ref start_time) = info.start_time {
-                    fields.push(("start_time".to_string(), format!("{}.{}", start_time.seconds, start_time.nanos)));
-                }
-                fields
-            }).collect();
-
-            info!(count = executions.len(), "Listed workflows");
-            Ok(executions)
-        }).await {
-            Ok(inner) => inner,
-            Err(_) => {
-                error!("list_workflows timed out after {}s", CLIENT_OP_TIMEOUT.as_secs());
-                Err("list_workflows timed out".to_string())
-            }
-        };
 
         let mut env = OwnedEnv::new();
         send_or_log(&mut env, &pid, "list_workflows", |env| match result {
             Ok(executions) => {
-                let maps: Vec<_> = executions.iter().map(|fields| {
-                    rustler::Term::map_from_pairs(
-                        env,
-                        &fields.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect::<Vec<_>>(),
-                    ).unwrap()
-                }).collect();
+                let maps: Vec<_> = executions
+                    .iter()
+                    .map(|fields| {
+                        rustler::Term::map_from_pairs(
+                            env,
+                            &fields
+                                .iter()
+                                .map(|(k, v)| (k.as_str(), v.as_str()))
+                                .collect::<Vec<_>>(),
+                        )
+                        .unwrap()
+                    })
+                    .collect();
                 let list = maps.encode(env);
                 (atoms::list_workflows_result(), (atoms::ok(), list)).encode(env)
             }
-            Err(msg) => (
-                atoms::list_workflows_result(),
-                (atoms::error(), msg),
-            ).encode(env),
+            Err(msg) => (atoms::list_workflows_result(), (atoms::error(), msg)).encode(env),
         });
     });
     atoms::ok()

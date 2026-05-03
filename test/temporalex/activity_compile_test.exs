@@ -25,29 +25,35 @@ defmodule Temporalex.ActivityCompileTest do
     end
 
     test "module with both perform/1 and perform/2 raises CompileError" do
-      assert_raise CompileError, ~r/defines both perform\/1 and perform\/2/, fn ->
-        Code.compile_string("""
-        defmodule TestBothPerform#{System.unique_integer([:positive])} do
-          use Temporalex.Activity
+      error =
+        assert_raise CompileError, fn ->
+          Code.compile_string("""
+          defmodule TestBothPerform#{System.unique_integer([:positive])} do
+            use Temporalex.Activity
 
-          @impl true
-          def perform(%{name: name}), do: {:ok, name}
+            @impl true
+            def perform(%{name: name}), do: {:ok, name}
 
-          @impl true
-          def perform(_ctx, %{name: name}), do: {:ok, name}
+            @impl true
+            def perform(_ctx, %{name: name}), do: {:ok, name}
+          end
+          """)
         end
-        """)
-      end
+
+      assert error.description =~ "defines both perform/1 and perform/2"
     end
 
     test "module with neither perform/1 nor perform/2 raises CompileError" do
-      assert_raise CompileError, ~r/must implement perform\/1 or perform\/2/, fn ->
-        Code.compile_string("""
-        defmodule TestNoPerform#{System.unique_integer([:positive])} do
-          use Temporalex.Activity
+      error =
+        assert_raise CompileError, fn ->
+          Code.compile_string("""
+          defmodule TestNoPerform#{System.unique_integer([:positive])} do
+            use Temporalex.Activity
+          end
+          """)
         end
-        """)
-      end
+
+      assert error.description =~ "must implement perform/1 or perform/2"
     end
 
     test "perform/1 module has __activity_type__" do

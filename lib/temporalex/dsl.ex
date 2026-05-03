@@ -107,7 +107,6 @@ defmodule Temporalex.DSL do
 
   defp build_defactivity(call, opts, body) do
     {name, args} = decompose_call(call)
-    impl_name = :"__temporal_perform_#{name}__"
 
     # Single-arg activities only — matches Temporal's model
     arg =
@@ -126,17 +125,19 @@ defmodule Temporalex.DSL do
                 "Use `defactivity #{name}(%{key1: val1, key2: val2})` instead."
       end
 
+    {public_arg, activity_input} = public_activity_args(arg)
+
     quote do
       @__temporal_activities__ {unquote(name), unquote(Macro.escape(opts))}
 
       @doc false
-      def unquote(impl_name)(unquote(arg)), do: unquote(body)
+      def __temporal_perform__(unquote(name), unquote(arg)), do: unquote(body)
 
-      def unquote(name)(unquote(arg)) do
+      def unquote(name)(unquote(public_arg)) do
         Temporalex.DSL.__call_activity__(
           __MODULE__,
           unquote(name),
-          unquote(arg),
+          unquote(activity_input),
           unquote(Macro.escape(opts))
         )
       end
@@ -145,6 +146,18 @@ defmodule Temporalex.DSL do
 
   defp decompose_call({:when, _, [call | _]}), do: decompose_call(call)
   defp decompose_call({name, _, args}) when is_atom(name), do: {name, args || []}
+
+  defp public_activity_args({name, _meta, context} = arg)
+       when is_atom(name) and is_atom(context) do
+    if name |> Atom.to_string() |> String.starts_with?("_") do
+      input = Macro.unique_var(:input, __MODULE__)
+      {{:=, [], [arg, input]}, input}
+    else
+      {arg, arg}
+    end
+  end
+
+  defp public_activity_args(arg), do: {arg, arg}
 
   # -- Runtime dispatch (called from generated functions) --
 
@@ -168,8 +181,7 @@ defmodule Temporalex.DSL do
 
       # Direct mode: no context, just run the implementation
       true ->
-        impl_fn = :"__temporal_perform_#{name}__"
-        apply(module, impl_fn, [input])
+        apply(module, :__temporal_perform__, [name, input])
     end
   end
 

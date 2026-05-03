@@ -115,17 +115,21 @@ defmodule Temporalex.BugfixReview2Test do
 
   describe "BUG-5: defactivity multi-arg compile error" do
     test "defactivity with multiple arguments raises CompileError" do
-      assert_raise CompileError, ~r/defactivity.*arguments/, fn ->
-        Code.compile_string("""
-        defmodule TestMultiArg do
-          use Temporalex.DSL
+      error =
+        assert_raise CompileError, fn ->
+          Code.compile_string("""
+          defmodule TestMultiArg do
+            use Temporalex.DSL
 
-          defactivity process(order_id, user_id) do
-            {:ok, {order_id, user_id}}
+            defactivity process(order_id, user_id) do
+              {:ok, {order_id, user_id}}
+            end
           end
+          """)
         end
-        """)
-      end
+
+      assert error.description =~ "defactivity"
+      assert error.description =~ "arguments"
     end
 
     test "defactivity with single argument compiles fine" do

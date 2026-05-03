@@ -89,11 +89,34 @@ defmodule Temporalex.MixProject do
         "CHANGELOG.md": [title: "Changelog"]
       ],
       groups_for_extras: [
-        Introduction: ~r/README|installation/,
-        Learning: ~r/guides\/learning/,
-        Advanced: ~r/guides\/advanced/,
-        Recipes: ~r/guides\/recipes/,
-        Changelog: ~r/CHANGELOG/
+        Introduction: [
+          "README.md",
+          "guides/introduction/installation.md"
+        ],
+        Learning: [
+          "guides/learning/workflows.md",
+          "guides/learning/activities.md",
+          "guides/learning/signals_and_queries.md",
+          "guides/learning/timers_and_scheduling.md",
+          "guides/learning/child_workflows.md",
+          "guides/learning/error_handling.md",
+          "guides/learning/the_dsl.md",
+          "guides/learning/testing.md",
+          "guides/learning/observability.md",
+          "guides/learning/configuration.md"
+        ],
+        Advanced: [
+          "guides/advanced/production.md"
+        ],
+        Recipes: [
+          "guides/recipes/saga_pattern.md",
+          "guides/recipes/fan_out_fan_in.md",
+          "guides/recipes/long_running_with_signals.md",
+          "guides/recipes/safe_deployments.md"
+        ],
+        Changelog: [
+          "CHANGELOG.md"
+        ]
       ],
       groups_for_modules: [
         Core: [

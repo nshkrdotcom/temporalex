@@ -1127,6 +1127,10 @@ defmodule Temporalex.Server do
     execute_activity_result(fn -> module.perform(ctx, args) end)
   end
 
+  defp execute_activity(module, {:dsl_activity, name}, args, _ctx) do
+    execute_activity_result(fn -> apply(module, :__temporal_perform__, [name, args]) end)
+  end
+
   defp execute_activity(module, impl_fn, args, _ctx) do
     execute_activity_result(fn -> apply(module, impl_fn, [args]) end)
   end
@@ -1345,15 +1349,14 @@ defmodule Temporalex.Server do
       if function_exported?(mod, :__temporal_activities__, 0) do
         for {name, _opts} <- mod.__temporal_activities__() do
           type = Temporalex.DSL.activity_type_string(mod, name)
-          impl_fn = :"__temporal_perform_#{name}__"
 
-          unless function_exported?(mod, impl_fn, 1) do
+          unless function_exported?(mod, :__temporal_perform__, 2) do
             raise ArgumentError,
-                  "Activity #{inspect(mod)}.#{name} is registered but #{impl_fn}/1 is not defined. " <>
+                  "Activity #{inspect(mod)}.#{name} is registered but __temporal_perform__/2 is not defined. " <>
                     "This is a bug in the module's defactivity macro."
           end
 
-          {type, {mod, impl_fn}}
+          {type, {mod, {:dsl_activity, name}}}
         end
       else
         unless function_exported?(mod, :__activity_type__, 0) do

@@ -6,11 +6,18 @@ defmodule Temporalex.ConnectionTest do
     :ok
   end
 
+  defp unique_connection_name(label) do
+    {:global, {__MODULE__, label, System.unique_integer([:positive])}}
+  end
+
   describe "start_link/1" do
     test "missing :name raises ArgumentError" do
-      assert_raise ArgumentError, ~r/requires :name/, fn ->
-        Temporalex.Connection.start_link(address: "http://localhost:7233")
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Temporalex.Connection.start_link(address: "http://localhost:7233")
+        end
+
+      assert error.message =~ "requires :name"
     end
   end
 
@@ -18,7 +25,7 @@ defmodule Temporalex.ConnectionTest do
     test "rejects garbage address" do
       result =
         Temporalex.Connection.start_link(
-          name: :"conn_test_#{System.unique_integer([:positive])}",
+          name: unique_connection_name(:invalid_url),
           address: "not-a-url"
         )
 
@@ -29,7 +36,7 @@ defmodule Temporalex.ConnectionTest do
     test "rejects address without scheme" do
       result =
         Temporalex.Connection.start_link(
-          name: :"conn_test_#{System.unique_integer([:positive])}",
+          name: unique_connection_name(:missing_scheme),
           address: "localhost:7233"
         )
 
@@ -39,14 +46,14 @@ defmodule Temporalex.ConnectionTest do
 
     test "accepts http address" do
       # Will fail to connect (no server) but shouldn't raise on validation
-      name = :"conn_ok_#{System.unique_integer([:positive])}"
+      name = unique_connection_name(:http)
       {:ok, pid} = Temporalex.Connection.start_link(name: name, address: "http://localhost:7233")
       assert Process.alive?(pid)
       GenServer.stop(pid)
     end
 
     test "accepts https address" do
-      name = :"conn_https_#{System.unique_integer([:positive])}"
+      name = unique_connection_name(:https)
 
       {:ok, pid} =
         Temporalex.Connection.start_link(name: name, address: "https://my-ns.tmprl.cloud:7233")
@@ -60,7 +67,7 @@ defmodule Temporalex.ConnectionTest do
     test "returns not_connected when runtime is nil" do
       # Simulate a connection that hasn't finished connecting by
       # checking the guard clause directly on the get handler
-      name = :"conn_notconn_#{System.unique_integer([:positive])}"
+      name = unique_connection_name(:not_connected)
       {:ok, pid} = Temporalex.Connection.start_link(name: name, address: "http://localhost:7233")
 
       # Wait for connection to complete, then verify the happy path works
@@ -73,7 +80,7 @@ defmodule Temporalex.ConnectionTest do
 
   describe "defaults" do
     test "address defaults to localhost:7233" do
-      name = :"conn_defaults_#{System.unique_integer([:positive])}"
+      name = unique_connection_name(:defaults)
       {:ok, pid} = Temporalex.Connection.start_link(name: name)
       assert Process.alive?(pid)
 

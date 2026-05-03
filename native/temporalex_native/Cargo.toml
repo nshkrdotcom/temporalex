@@ -17,5 +17,5 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 prost = "0.14"
 url = "2"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "fmt", "std"] }
 hex = "0.4"

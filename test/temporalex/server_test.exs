@@ -114,7 +114,7 @@ defmodule Temporalex.ServerTest do
   defmodule RetryWorkflow do
     use Temporalex.DSL
 
-    defactivity flaky_activity(input),
+    defactivity flaky_activity(_input),
       timeout: 5_000,
       retry_policy: [
         initial_interval: 100,
@@ -242,6 +242,10 @@ defmodule Temporalex.ServerTest do
   defp unique_queue(prefix) do
     ts = System.system_time(:millisecond)
     "#{prefix}-#{ts}-#{System.unique_integer([:positive])}"
+  end
+
+  defp process_name(label, suffix) do
+    {:global, {__MODULE__, label, suffix}}
   end
 
   defp start_server(task_queue, workflows, activities) do
@@ -447,7 +451,7 @@ defmodule Temporalex.ServerTest do
   describe "client API" do
     test "start_workflow and get_result" do
       q = unique_queue("client")
-      conn_name = :"conn_#{q}"
+      conn_name = process_name(:client_connection, q)
       start_connection(conn_name)
       start_server(q, [{"ProcessOrder", &Orders.process_order/1}], [Orders])
       Process.sleep(500)
@@ -508,7 +512,7 @@ defmodule Temporalex.ServerTest do
 
       {:ok, sup_pid} =
         Temporalex.start_link(
-          name: :"sup_#{q}",
+          name: process_name(:supervisor, q),
           address: @server_url,
           namespace: @namespace,
           task_queue: q,
@@ -871,7 +875,7 @@ defmodule Temporalex.ServerTest do
 
       {:ok, sup_pid} =
         Temporalex.start_link(
-          name: :"sup_shutdown_#{q}",
+          name: process_name(:supervisor_shutdown, q),
           address: @server_url,
           namespace: @namespace,
           task_queue: q,
@@ -977,7 +981,7 @@ defmodule Temporalex.ServerTest do
   defmodule NonRetryableWorkflow do
     use Temporalex.DSL
 
-    defactivity always_fail(input), timeout: 5_000, retry_policy: [max_attempts: 5] do
+    defactivity always_fail(_input), timeout: 5_000, retry_policy: [max_attempts: 5] do
       {:error,
        %Temporalex.Error.ApplicationError{
          message: "permanent failure",

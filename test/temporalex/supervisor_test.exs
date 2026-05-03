@@ -63,15 +63,21 @@ defmodule Temporalex.SupervisorTest do
     end
 
     test "init/1 raises when task_queue is missing" do
-      assert_raise ArgumentError, ~r/task_queue/, fn ->
-        Temporalex.init(name: MyApp.Temporal)
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Temporalex.init(name: MyApp.Temporal)
+        end
+
+      assert error.message =~ "task_queue"
     end
 
     test "start_link raises when name is missing" do
-      assert_raise ArgumentError, ~r/name/, fn ->
-        Temporalex.start_link(task_queue: "q")
-      end
+      error =
+        assert_raise ArgumentError, fn ->
+          Temporalex.start_link(task_queue: "q")
+        end
+
+      assert error.message =~ "name"
     end
   end
 end
