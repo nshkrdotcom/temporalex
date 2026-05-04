@@ -25,7 +25,7 @@
   name: MyApp.Temporal,
   address: "https://my-namespace.tmprl.cloud:7233",
   namespace: "my-namespace",
-  api_key: System.fetch_env!("TEMPORAL_API_KEY"),
+  api_key: temporal_cloud_api_key,
   task_queue: "orders",
   workflows: [MyApp.Workflows.ProcessOrder],
   activities: [MyApp.Activities]}
@@ -73,13 +73,13 @@ children = [
 ]
 ```
 
-## Environment-Based Config
+## Standalone Application Config
 
 ```elixir
 config :my_app, :temporal,
-  address: System.get_env("TEMPORAL_ADDRESS", "http://localhost:7233"),
-  namespace: System.get_env("TEMPORAL_NAMESPACE", "default"),
-  api_key: System.get_env("TEMPORAL_API_KEY")
+  address: "http://localhost:7233",
+  namespace: "default",
+  api_key: temporal_cloud_api_key
 
 # In application.ex
 temporal_config = Application.fetch_env!(:my_app, :temporal)
@@ -95,6 +95,11 @@ children = [
     activities: [...]}
 ]
 ```
+
+This is standalone boot configuration. Governed authority paths must receive
+endpoint, namespace, task queue, worker identity, and credential refs from the
+owning authority materializer rather than reading process env in Temporalex
+runtime paths.
 
 ## What's Next
 

@@ -34,18 +34,20 @@ The first compile takes a few minutes — it's building the Temporal Rust Core S
 
 ## Running Temporal Locally
 
-You need a Temporal server to develop against. The easiest way:
+You need a Temporal server to develop against. Start it through the repo-owned
+application substrate that consumes Temporalex instead of launching a raw
+Temporal CLI dev server directly. In this workspace, Mezzanine owns that local
+substrate:
 
 ```bash
-# Install the Temporal CLI
-brew install temporal  # macOS
-# or: curl -sSf https://temporal.download/cli.sh | sh
-
-# Start the dev server
-temporal server start-dev
+cd /home/home/p/g/n/mezzanine
+just dev-up
+just dev-status
 ```
 
-This starts Temporal at `http://localhost:7233` with a web UI at `http://localhost:8233`.
+This provides Temporal at `http://localhost:7233` with a web UI at
+`http://localhost:8233`. Stop it from the same Mezzanine checkout with
+`just dev-down` when your local development session is finished.
 
 ## Your First Connection
 
@@ -83,7 +85,7 @@ For Temporal Cloud instead of local dev:
   name: MyApp.Temporal,
   address: "https://my-namespace.tmprl.cloud:7233",
   namespace: "my-namespace",
-  api_key: System.fetch_env!("TEMPORAL_API_KEY"),
+  api_key: temporal_cloud_api_key,
   task_queue: "default",
   workflows: [],
   activities: []}

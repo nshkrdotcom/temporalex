@@ -4,6 +4,11 @@
 
 Initial release.
 
+- Governed authority guard rejects raw endpoint, namespace, API key, headers,
+  task queue, worker identity, and workflow auth metadata when a governed
+  authority ref set is supplied.
+- Local development docs now point to repo-owned Temporal substrate commands,
+  and policy tests forbid raw local Temporal CLI dev-server commands.
 - Workflow execution via Rust Core SDK NIFs
 - Activity support with `defactivity` macro and `use Temporalex.Activity`
 - Signals, queries, timers, and continue-as-new

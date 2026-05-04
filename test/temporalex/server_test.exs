@@ -114,7 +114,7 @@ defmodule Temporalex.ServerTest do
   defmodule RetryWorkflow do
     use Temporalex.DSL
 
-    defactivity flaky_activity(_input),
+    defactivity flaky_activity(input),
       timeout: 5_000,
       retry_policy: [
         initial_interval: 100,
@@ -122,7 +122,7 @@ defmodule Temporalex.ServerTest do
         backoff_coefficient: 1.0
       ] do
       # Track attempts via a file to count retries across activity invocations
-      path = "/tmp/temporalex_retry_count_#{System.get_env("RETRY_TEST_ID", "default")}"
+      path = Path.join(System.tmp_dir!(), "temporalex_retry_count_#{input["test_id"]}")
 
       count =
         case File.read(path) do
@@ -140,8 +140,7 @@ defmodule Temporalex.ServerTest do
     end
 
     def run(%{"test_id" => test_id}) do
-      System.put_env("RETRY_TEST_ID", test_id)
-      flaky_activity(nil)
+      flaky_activity(%{"test_id" => test_id})
     end
   end
 

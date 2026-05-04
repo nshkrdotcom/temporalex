@@ -11,6 +11,10 @@ defmodule Temporalex.SourcePolicyTest do
     assert_no_tokens!(source_files(), atom_construction_tokens())
   end
 
+  test "docs do not prescribe raw local Temporal dev server commands" do
+    assert_no_tokens!(doc_files(), [raw_temporal_dev_command_token()])
+  end
+
   defp assert_no_tokens!(files, tokens) do
     hits =
       for file <- files,
@@ -27,9 +31,46 @@ defmodule Temporalex.SourcePolicyTest do
       Path.join(@repo_root, "mix.exs"),
       Path.join(@repo_root, "native/temporalex_native/Cargo.toml")
     ] ++
-      Path.wildcard(Path.join(@repo_root, "lib/**/*.ex")) ++
-      Path.wildcard(Path.join(@repo_root, "test/**/*.exs")) ++
-      Path.wildcard(Path.join(@repo_root, "native/temporalex_native/src/*.rs"))
+      source_tree_files(
+        [
+          Path.join(@repo_root, "lib"),
+          Path.join(@repo_root, "test"),
+          Path.join(@repo_root, "native/temporalex_native/src")
+        ],
+        [".ex", ".exs", ".rs"]
+      )
+  end
+
+  defp doc_files do
+    source_tree_files([Path.join(@repo_root, "README.md"), Path.join(@repo_root, "guides")], [
+      ".md"
+    ])
+  end
+
+  defp source_tree_files(paths, extensions) do
+    paths
+    |> Enum.flat_map(&walk_files/1)
+    |> Enum.filter(&has_extension?(&1, extensions))
+    |> Enum.sort()
+  end
+
+  defp walk_files(path) do
+    cond do
+      File.dir?(path) ->
+        path
+        |> File.ls!()
+        |> Enum.flat_map(&walk_files(Path.join(path, &1)))
+
+      File.regular?(path) ->
+        [path]
+
+      true ->
+        []
+    end
+  end
+
+  defp has_extension?(path, extensions) do
+    Enum.any?(extensions, &String.ends_with?(path, &1))
   end
 
   defp pattern_engine_tokens do
@@ -52,6 +93,10 @@ defmodule Temporalex.SourcePolicyTest do
       ["import ", "re"]
     ]
     |> Enum.map(&IO.iodata_to_binary/1)
+  end
+
+  defp raw_temporal_dev_command_token do
+    IO.iodata_to_binary(["temporal", " server ", "start", "-dev"])
   end
 
   defp atom_construction_tokens do

@@ -71,7 +71,7 @@ Temporal replays your workflow code from history to rebuild state. If your code 
 **Don't do this inside a workflow:**
 - `DateTime.utc_now()` — use `workflow_info()` for timestamps
 - `:rand.uniform()` — use `random()` which is replay-safe
-- `System.fetch_env!()` — use activities for environment access
+- process env reads — use activities for environment access
 - HTTP calls, DB queries — use activities for all I/O
 
 **Do this instead:**

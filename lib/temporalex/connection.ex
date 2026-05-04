@@ -78,6 +78,8 @@ defmodule Temporalex.Connection do
 
   @impl true
   def init(opts) do
+    :ok = Temporalex.AuthorityGuard.validate_connection_opts!(opts)
+
     name = Keyword.fetch!(opts, :name)
     address = Keyword.get(opts, :address, "http://localhost:7233")
     namespace = Keyword.get(opts, :namespace, "default")

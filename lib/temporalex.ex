@@ -88,6 +88,8 @@ defmodule Temporalex do
         raise ArgumentError,
               "Temporalex requires :name option (e.g., name: MyApp.Temporal)"
 
+    :ok = Temporalex.AuthorityGuard.validate_supervisor_opts!(opts)
+
     conn_name = connection_name(name)
 
     conn_opts =
@@ -95,7 +97,7 @@ defmodule Temporalex do
         name: conn_name,
         address: Keyword.get(opts, :address, "http://localhost:7233"),
         namespace: Keyword.get(opts, :namespace, "default")
-      ] ++ Keyword.take(opts, [:api_key, :headers])
+      ] ++ Keyword.take(opts, [:api_key, :headers, :governed_authority])
 
     task_queue =
       opts[:task_queue] ||
@@ -109,7 +111,11 @@ defmodule Temporalex do
         workflows: Keyword.get(opts, :workflows, []),
         activities: Keyword.get(opts, :activities, [])
       ] ++
-        Keyword.take(opts, [:max_concurrent_workflow_tasks, :max_concurrent_activity_tasks])
+        Keyword.take(opts, [
+          :max_concurrent_workflow_tasks,
+          :max_concurrent_activity_tasks,
+          :governed_authority
+        ])
 
     children = [
       {Temporalex.Connection, conn_opts},

@@ -103,6 +103,8 @@ defmodule Temporalex.Server do
 
   @impl true
   def init(opts) do
+    :ok = Temporalex.AuthorityGuard.validate_server_opts!(opts)
+
     task_queue =
       opts[:task_queue] ||
         raise ArgumentError,

@@ -33,7 +33,9 @@ Retries, timers, signals, queries, versioning, and child workflows — all backe
 
 - Elixir ~> 1.17
 - Rust toolchain ([rustup.rs](https://rustup.rs))
-- Temporal server (local: `temporal server start-dev`)
+- Temporal server supplied by an application-owned local substrate. In this
+  workspace, use `/home/home/p/g/n/mezzanine` and run `just dev-up` for local
+  Temporal development.
 
 ## Installation
 
