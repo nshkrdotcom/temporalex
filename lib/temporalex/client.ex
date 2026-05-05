@@ -28,6 +28,7 @@ defmodule Temporalex.Client do
   require Logger
 
   alias Temporalex.Converter
+  alias Temporalex.RuntimePolicy
   alias Temporal.Api.Common.V1.Payloads
 
   @default_timeout 10_000
@@ -251,19 +252,26 @@ defmodule Temporalex.Client do
     * `:run_id` — target a specific run (default: current run)
     * `:timeout` — NIF call timeout in ms (default: #{@default_timeout})
   """
-  @spec signal_workflow(atom() | pid() | map(), String.t(), String.t(), term(), keyword()) ::
+  @spec signal_workflow(
+          Temporalex.process_name() | pid() | map(),
+          String.t(),
+          String.t(),
+          term(),
+          keyword()
+        ) ::
           :ok | {:error, term()}
   def signal_workflow(conn, workflow_id, signal_name, args \\ nil, opts \\ []) do
     run_id = Keyword.get(opts, :run_id, "")
     timeout = Keyword.get(opts, :timeout, @default_timeout)
 
-    Logger.info("Client.signal_workflow",
-      workflow_id: workflow_id,
-      signal_name: signal_name,
-      run_id: run_id
-    )
+    with :ok <- RuntimePolicy.validate_signal_name(signal_name),
+         {:ok, client, namespace} <- resolve_connection(conn) do
+      Logger.info("Client.signal_workflow",
+        workflow_id: workflow_id,
+        signal_name: signal_name,
+        run_id: run_id
+      )
 
-    with {:ok, client, namespace} <- resolve_connection(conn) do
       input_bytes = encode_signal_args(args)
       request_id = generate_request_id()
 
@@ -311,19 +319,26 @@ defmodule Temporalex.Client do
     * `:run_id` — target a specific run (default: current run)
     * `:timeout` — NIF call timeout in ms (default: #{@default_timeout})
   """
-  @spec query_workflow(atom() | pid() | map(), String.t(), String.t(), term(), keyword()) ::
+  @spec query_workflow(
+          Temporalex.process_name() | pid() | map(),
+          String.t(),
+          String.t(),
+          term(),
+          keyword()
+        ) ::
           {:ok, term()} | {:error, term()}
   def query_workflow(conn, workflow_id, query_type, args \\ nil, opts \\ []) do
     run_id = Keyword.get(opts, :run_id, "")
     timeout = Keyword.get(opts, :timeout, @default_timeout)
 
-    Logger.info("Client.query_workflow",
-      workflow_id: workflow_id,
-      query_type: query_type,
-      run_id: run_id
-    )
+    with :ok <- RuntimePolicy.validate_query_name(query_type),
+         {:ok, client, namespace} <- resolve_connection(conn) do
+      Logger.info("Client.query_workflow",
+        workflow_id: workflow_id,
+        query_type: query_type,
+        run_id: run_id
+      )
 
-    with {:ok, client, namespace} <- resolve_connection(conn) do
       query_args_bytes = encode_signal_args(args)
 
       :ok =
@@ -539,13 +554,36 @@ defmodule Temporalex.Client do
   # Resolve connection to {client_resource, namespace}
   # Accepts: Connection name, Temporalex instance name, pid, or map
   defp resolve_connection(conn) when is_pid(conn) do
+    resolve_connection_name(conn)
+  end
+
+  defp resolve_connection({:global, _term} = conn), do: resolve_connection_name(conn)
+  defp resolve_connection({:via, _module, _term} = conn), do: resolve_connection_name(conn)
+
+  defp resolve_connection(conn) when is_atom(conn) do
+    case resolve_connection_name(conn) do
+      {:error, {:connection_error, _reason}} ->
+        conn
+        |> Temporalex.connection_name()
+        |> resolve_connection_name()
+
+      result ->
+        result
+    end
+  end
+
+  defp resolve_connection(%{client: client, namespace: namespace}) do
+    {:ok, client, namespace}
+  end
+
+  defp resolve_connection_name(conn) do
     try do
       case Temporalex.Connection.get(conn) do
         {:ok, %{client: client, namespace: namespace}} ->
           {:ok, client, namespace}
 
         {:error, reason} ->
-          Logger.error("Client: failed to resolve connection PID", error: inspect(reason))
+          Logger.error("Client: failed to resolve connection", error: inspect(reason))
           {:error, {:connection_error, reason}}
       end
     catch
@@ -553,36 +591,6 @@ defmodule Temporalex.Client do
         Logger.error("Client: connection process unavailable", error: inspect(reason))
         {:error, {:connection_error, :not_alive}}
     end
-  end
-
-  defp resolve_connection(conn) when is_atom(conn) do
-    try do
-      case Temporalex.Connection.get(conn) do
-        {:ok, %{client: client, namespace: namespace}} ->
-          {:ok, client, namespace}
-
-        {:error, _} ->
-          # Maybe it's an instance name — try derived connection name
-          derived = Temporalex.connection_name(conn)
-
-          case Temporalex.Connection.get(derived) do
-            {:ok, %{client: client, namespace: namespace}} ->
-              {:ok, client, namespace}
-
-            {:error, reason} ->
-              Logger.error("Client: failed to resolve connection", error: inspect(reason))
-              {:error, {:connection_error, reason}}
-          end
-      end
-    catch
-      :exit, reason ->
-        Logger.error("Client: connection process unavailable", error: inspect(reason))
-        {:error, {:connection_error, :not_alive}}
-    end
-  end
-
-  defp resolve_connection(%{client: client, namespace: namespace}) do
-    {:ok, client, namespace}
   end
 
   # Encode workflow arguments to protobuf Payloads bytes

@@ -7,6 +7,9 @@ Initial release.
 - Governed authority guard rejects raw endpoint, namespace, API key, headers,
   task queue, worker identity, and workflow auth metadata when a governed
   authority ref set is supplied.
+- Runtime naming and lifecycle metadata now use bounded policies instead of
+  dynamic module-name construction, and source policy tests forbid repo-owned
+  atom construction and regex engines.
 - Local development docs now point to repo-owned Temporal substrate commands,
   and policy tests forbid raw local Temporal CLI dev-server commands.
 - Workflow execution via Rust Core SDK NIFs

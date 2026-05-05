@@ -118,8 +118,10 @@ defmodule Temporalex.Telemetry do
 
   @doc false
   def worker_activation(duration, metadata) do
+    event_kind = Temporalex.RuntimePolicy.worker_event_kind!(:activation)
+
     :telemetry.execute(
-      [:temporalex, :worker, :activation],
+      [:temporalex, :worker, event_kind],
       %{
         duration: duration,
         job_count: Map.get(metadata, :job_count, 0),

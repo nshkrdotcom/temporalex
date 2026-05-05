@@ -3,8 +3,10 @@ defmodule Temporalex.SupervisorTest do
 
   describe "Temporalex as Supervisor" do
     test "connection_name/1 derives correct module name" do
-      assert Temporalex.connection_name(MyApp.Temporal) == MyApp.Temporal.Connection
-      assert Temporalex.connection_name(Foo) == Foo.Connection
+      assert Temporalex.connection_name(MyApp.Temporal) ==
+               {:global, {MyApp.Temporal, Temporalex.Connection}}
+
+      assert Temporalex.connection_name(Foo) == {:global, {Foo, Temporalex.Connection}}
     end
 
     test "init/1 builds correct child specs" do
@@ -32,7 +34,7 @@ defmodule Temporalex.SupervisorTest do
                {Temporalex.Connection, :start_link,
                 [
                   [
-                    name: MyApp.Temporal.Connection,
+                    name: {:global, {MyApp.Temporal, Temporalex.Connection}},
                     address: "http://localhost:7233",
                     namespace: "test-ns"
                   ]
@@ -41,7 +43,10 @@ defmodule Temporalex.SupervisorTest do
       # Server child — extract opts from start tuple
       assert server_spec.id == {Temporalex.Server, "my-queue"}
       {Temporalex.Server, :start_link, [server_opts]} = server_spec.start
-      assert Keyword.fetch!(server_opts, :connection) == MyApp.Temporal.Connection
+
+      assert Keyword.fetch!(server_opts, :connection) ==
+               {:global, {MyApp.Temporal, Temporalex.Connection}}
+
       assert Keyword.fetch!(server_opts, :task_queue) == "my-queue"
       assert Keyword.fetch!(server_opts, :workflows) == [{"ProcessOrder", &Function.identity/1}]
       assert Keyword.fetch!(server_opts, :activities) == [SomeActivity]

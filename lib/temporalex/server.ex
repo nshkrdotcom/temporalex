@@ -216,6 +216,8 @@ defmodule Temporalex.Server do
   # ============================================================
 
   def handle_info({:executor_commands, run_id, commands, wf_state, status}, state) do
+    status = Temporalex.RuntimePolicy.workflow_status!(status)
+
     case Map.pop(state.pending_activations, run_id) do
       {nil, _} ->
         Logger.warning("Executor commands for unknown activation", run_id: run_id)
@@ -1144,7 +1146,9 @@ defmodule Temporalex.Server do
           payload = Temporalex.Converter.to_payload(value)
 
           %ActivityExecutionResult{
-            status: {:completed, %Coresdk.ActivityResult.Success{result: payload}}
+            status:
+              {Temporalex.RuntimePolicy.activity_status!(:completed),
+               %Coresdk.ActivityResult.Success{result: payload}}
           }
 
         {:error, %{__exception__: true} = exception} ->
@@ -1166,14 +1170,16 @@ defmodule Temporalex.Server do
   # Temporal's server rejects failures without failure_info set.
   defp activity_failure(%Temporal.Api.Failure.V1.Failure{} = failure) do
     %ActivityExecutionResult{
-      status: {:failed, %Coresdk.ActivityResult.Failure{failure: failure}}
+      status:
+        {Temporalex.RuntimePolicy.activity_status!(:failed),
+         %Coresdk.ActivityResult.Failure{failure: failure}}
     }
   end
 
   defp activity_failure(message) when is_binary(message) do
     %ActivityExecutionResult{
       status:
-        {:failed,
+        {Temporalex.RuntimePolicy.activity_status!(:failed),
          %Coresdk.ActivityResult.Failure{
            failure: %Temporal.Api.Failure.V1.Failure{
              message: message,

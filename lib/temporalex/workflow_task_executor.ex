@@ -32,6 +32,7 @@ defmodule Temporalex.WorkflowTaskExecutor do
   alias Coresdk.WorkflowCommands.{WorkflowCommand, CompleteWorkflowExecution, ScheduleActivity}
   alias Coresdk.WorkflowCommands.{FailWorkflowExecution, StartTimer}
   alias Coresdk.WorkflowCommands.{ContinueAsNewWorkflowExecution, StartChildWorkflowExecution}
+  alias Temporalex.RuntimePolicy
 
   defstruct [
     :server_pid,
@@ -417,10 +418,11 @@ defmodule Temporalex.WorkflowTaskExecutor do
 
   defp flush_commands(state) do
     commands = Enum.reverse(state.commands)
+    status = RuntimePolicy.workflow_status!(state.status)
 
     send(
       state.server_pid,
-      {:executor_commands, state.run_id, commands, state.workflow_state, state.status}
+      {:executor_commands, state.run_id, commands, state.workflow_state, status}
     )
   end
 

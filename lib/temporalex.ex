@@ -132,11 +132,11 @@ defmodule Temporalex do
       {:ok, handle} = Temporalex.start_workflow(conn, MyWorkflow, %{key: "value"})
   """
   @spec connection_name(process_name()) :: process_name()
-  def connection_name({:global, term}), do: {:global, {term, Connection}}
-  def connection_name({:via, module, term}), do: {:via, module, {term, Connection}}
+  def connection_name({:global, term}), do: {:global, {term, Temporalex.Connection}}
+  def connection_name({:via, module, term}), do: {:via, module, {term, Temporalex.Connection}}
 
   def connection_name(instance_name) when is_atom(instance_name),
-    do: Module.concat(instance_name, Connection)
+    do: {:global, {instance_name, Temporalex.Connection}}
 
   # --- Client API ---
 
