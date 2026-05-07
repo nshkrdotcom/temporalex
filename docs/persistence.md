@@ -75,3 +75,15 @@ Evidence stores opaque refs, stable redacted ids, hashes, bounded metadata, clai
 ## Migration And Preflight Behavior
 
 Temporal history is owned by Temporal server. Local development substrate is controlled from mezzanine with just dev-* commands.
+
+## Phase 12 No-Application-Schema Closeout
+
+- Tier: `:ops_durable` only when an owning application supplies explicit Temporal substrate proof.
+- Schema owner: none in this library; Temporal history belongs to the configured Temporal service, not to Temporalex.
+- Migration owner: none in this library.
+- Migration command: not applicable.
+- Substrate preflight command: owning applications use repo-owned commands such as `just dev-status` from `/home/home/p/g/n/mezzanine` for local Temporal development, then application-level worker/client preflight.
+- Failure behavior: absent Temporal substrate proof keeps durable workflow claims invalid; this library must not start a raw CLI dev server as fallback.
+- Rollback behavior: rollback is owned by the Temporal service/operator and the application workflow versioning policy, not by Temporalex migrations.
+- Tagged test command: `mix format --check-formatted; mix compile --warnings-as-errors; mix test; mix docs`.
+- Release claim boundary: Temporal durability is valid only when an owning application records namespace, task queue, substrate health, worker/client preflight, focused tests, QC, and pushed commit evidence.
