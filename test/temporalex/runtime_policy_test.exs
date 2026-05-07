@@ -4,6 +4,18 @@ defmodule Temporalex.RuntimePolicyTest do
   alias Temporalex.RuntimePolicy
 
   test "bounds workflow activity retry worker signal and query vocabularies" do
+    assert RuntimePolicy.default_runtime_mode() == :disabled
+    assert :ok = RuntimePolicy.validate_runtime_mode(:disabled)
+    assert :ok = RuntimePolicy.validate_runtime_mode(:live_temporal)
+
+    assert {:error, {:unknown_runtime_mode, :ambient_default}} =
+             RuntimePolicy.validate_runtime_mode(:ambient_default)
+
+    refute RuntimePolicy.temporal_enabled?()
+    refute RuntimePolicy.temporal_enabled?(%{})
+    refute RuntimePolicy.temporal_enabled?(runtime_mode: :disabled)
+    assert RuntimePolicy.temporal_enabled?(runtime_mode: :live_temporal)
+
     assert :ok = RuntimePolicy.validate_workflow_status(:running)
 
     assert {:error, {:unknown_workflow_status, :paused}} =

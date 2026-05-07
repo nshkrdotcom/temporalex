@@ -5,6 +5,7 @@ defmodule Temporalex.RuntimePolicy do
 
   @workflow_statuses [:idle, :yielded, :running, :done]
   @activity_statuses [:completed, :failed, :cancelled]
+  @runtime_modes [:disabled, :live_temporal]
   @retry_reasons [
     :timeout,
     :cancellation,
@@ -14,6 +15,29 @@ defmodule Temporalex.RuntimePolicy do
     :workflow_failure
   ]
   @worker_event_kinds [:activation]
+
+  @spec default_runtime_mode() :: :disabled
+  def default_runtime_mode, do: :disabled
+
+  @spec validate_runtime_mode(term()) :: :ok | {:error, {:unknown_runtime_mode, term()}}
+  def validate_runtime_mode(mode) when mode in @runtime_modes, do: :ok
+  def validate_runtime_mode(mode), do: {:error, {:unknown_runtime_mode, mode}}
+
+  @spec temporal_enabled?(keyword() | map() | nil) :: boolean()
+  def temporal_enabled?(attrs \\ nil)
+
+  def temporal_enabled?(nil), do: false
+
+  def temporal_enabled?(attrs) when is_list(attrs) do
+    attrs |> Map.new() |> temporal_enabled?()
+  end
+
+  def temporal_enabled?(attrs) when is_map(attrs) do
+    Map.get(attrs, :runtime_mode, Map.get(attrs, "runtime_mode", default_runtime_mode())) ==
+      :live_temporal
+  end
+
+  def temporal_enabled?(_attrs), do: false
 
   @spec validate_workflow_status(term()) :: :ok | {:error, {:unknown_workflow_status, term()}}
   def validate_workflow_status(status) when status in @workflow_statuses, do: :ok

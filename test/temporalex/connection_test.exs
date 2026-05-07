@@ -44,6 +44,7 @@ defmodule Temporalex.ConnectionTest do
       assert msg =~ "Invalid Temporal server address"
     end
 
+    @tag :e2e
     test "accepts http address" do
       # Will fail to connect (no server) but shouldn't raise on validation
       name = unique_connection_name(:http)
@@ -52,6 +53,7 @@ defmodule Temporalex.ConnectionTest do
       GenServer.stop(pid)
     end
 
+    @tag :e2e
     test "accepts https address" do
       name = unique_connection_name(:https)
 
@@ -64,6 +66,7 @@ defmodule Temporalex.ConnectionTest do
   end
 
   describe "get/1 when not connected" do
+    @tag :e2e
     test "returns not_connected when runtime is nil" do
       # Simulate a connection that hasn't finished connecting by
       # checking the guard clause directly on the get handler
@@ -79,6 +82,7 @@ defmodule Temporalex.ConnectionTest do
   end
 
   describe "defaults" do
+    @tag :e2e
     test "address defaults to localhost:7233" do
       name = unique_connection_name(:defaults)
       {:ok, pid} = Temporalex.Connection.start_link(name: name)

@@ -37,6 +37,11 @@ Retries, timers, signals, queries, versioning, and child workflows — all backe
   workspace, use `/home/home/p/g/n/mezzanine` and run `just dev-up` for local
   Temporal development.
 
+Temporalex does not start or connect by default when the OTP application is
+loaded. Applications opt in by supervising `Temporalex` or `Temporalex.Server`;
+`Temporalex.RuntimePolicy.default_runtime_mode/0` returns `:disabled`, and
+`:live_temporal` must be selected explicitly by the owning application.
+
 ## Installation
 
 Add to your `mix.exs`:
