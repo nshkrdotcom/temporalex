@@ -34,6 +34,7 @@ temporalex-*.tar
 # Secrets and env files
 .env
 *.secret
+.dependency_sources.local.exs
 
 # OS
 .DS_Store

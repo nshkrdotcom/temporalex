@@ -1,3 +1,7 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("build_support/dependency_sources.exs", __DIR__)
+end
+
 defmodule Temporalex.MixProject do
   use Mix.Project
 
@@ -35,16 +39,17 @@ defmodule Temporalex.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
-    [
-      {:rustler, "~> 0.37", runtime: false},
-      {:protobuf, "~> 0.13"},
-      {:google_protos, "~> 0.4"},
-      {:jason, "~> 1.4"},
-      {:telemetry, "~> 1.0"},
-      {:opentelemetry_api, "~> 1.4", optional: true},
-      {:opentelemetry_semantic_conventions, "~> 1.27", optional: true},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
-    ]
+    DependencySources.deps(__DIR__) ++
+      [
+        {:rustler, "~> 0.37", runtime: false},
+        {:protobuf, "~> 0.13"},
+        {:google_protos, "~> 0.4"},
+        {:jason, "~> 1.4"},
+        {:telemetry, "~> 1.0"},
+        {:opentelemetry_api, "~> 1.4", optional: true},
+        {:opentelemetry_semantic_conventions, "~> 1.27", optional: true},
+        {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      ]
   end
 
   defp package do
@@ -52,7 +57,7 @@ defmodule Temporalex.MixProject do
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       files: ~w(lib guides native/temporalex_native/src native/temporalex_native/Cargo.toml
-                 .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
+                 build_support .formatter.exs mix.exs README.md LICENSE CHANGELOG.md AGENTS.md)
     ]
   end
 
