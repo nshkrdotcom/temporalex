@@ -43,7 +43,6 @@ defmodule Temporalex.MixProject do
       [
         {:rustler, "~> 0.37", runtime: false},
         {:protobuf, "~> 0.13"},
-        {:google_protos, "~> 0.4"},
         {:jason, "~> 1.4"},
         {:telemetry, "~> 1.0"},
         {:opentelemetry_api, "~> 1.4", optional: true},
